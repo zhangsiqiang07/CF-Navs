@@ -414,6 +414,7 @@ export interface SortReq {
 
 /** 首页跨分类拖拽后，按分类提交完整的书签顺序。 */
 export interface BookmarkReorganizeReq {
+  deleted_ids?: number[]
   category_orders: Array<{
     category_id: number
     ids: number[]

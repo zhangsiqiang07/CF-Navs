@@ -42,6 +42,7 @@
   import { getErrorMessage } from '../lib/api'
   import { reorderByIds } from '../lib/reorder'
   import { buildHomeSortCategoryOrders, moveBookmarkToCategory } from '../lib/homeSort'
+  import { sortableList } from '../lib/sortableList'
   import type { SortTransfer } from '../lib/sortableList'
 
   type AsyncVoid<T = void> = T | Promise<T>
@@ -66,7 +67,7 @@
     authLoading?: boolean
     onOpenCreateBookmark?: (categoryId?: string | number) => AsyncVoid
     onEditBookmark?: (bookmark: PublicBookmark) => AsyncVoid
-    onReorganizeBookmarks?: (categoryOrders: BookmarkReorganizeReq['category_orders']) => AsyncVoid
+    onReorganizeBookmarks?: (categoryOrders: BookmarkReorganizeReq['category_orders'], deletedIds?: number[]) => AsyncVoid
     onOpenCreateCategory?: (parentId?: string | number | null) => AsyncVoid
     focusCategoryId?: number | null
     onSwitchToAdmin?: () => AsyncVoid
@@ -118,6 +119,7 @@
   let scrollSpySuppressedUntil = 0
   let homeSortMode = $state(false)
   let homeSortSaving = $state(false)
+  let homeSortDeletedIds: number[] = $state.raw([])
   // 每次整体替换；不做深层代理。
   let homeSortDraft: PublicBookmark[] = $state.raw([])
   let homeSortError = $state('')
@@ -246,18 +248,25 @@
   function cancelHomeSort(): void {
     homeSortMode = false
     homeSortDraft = []
+    homeSortDeletedIds = []
     homeSortError = ''
   }
 
   function handleHomeSortDraft(categoryId: number, orderedIds: number[]): void {
-    if (!homeSortMode) return
+    if (!isAuthenticated || homeSortSaving || !homeSortMode) return
     homeSortDraft = replaceCategoryOrder(homeSortDraft, categoryId, orderedIds)
   }
 
   function handleHomeSortTransfer(transfer: SortTransfer): void {
-    if (!homeSortMode || transfer.fromCategoryId == null || transfer.toCategoryId == null) return
+    if (!isAuthenticated || homeSortSaving || !homeSortMode || transfer.fromCategoryId == null || transfer.toCategoryId == null) return
 
     const bookmarkId = Number(transfer.itemId)
+    if (transfer.toCategoryId === -1) {
+      if (!homeSortDraft.some((bookmark) => bookmark.id === bookmarkId)) return
+      homeSortDeletedIds = [...homeSortDeletedIds, bookmarkId]
+      homeSortDraft = homeSortDraft.filter((bookmark) => bookmark.id !== bookmarkId)
+      return
+    }
     const fromCategoryId = Number(transfer.fromCategoryId)
     const toCategoryId = Number(transfer.toCategoryId)
     let nextDraft = homeSortDraft.map((bookmark) => (
@@ -283,6 +292,7 @@
   }
 
   async function saveHomeSort(): Promise<void> {
+    if (!isAuthenticated || homeSortSaving) return
     if (!onReorganizeBookmarks || !homeSortMode) {
       cancelHomeSort()
       return
@@ -292,13 +302,14 @@
     homeSortError = ''
     try {
       const categoryOrders = buildHomeSortCategoryOrders(sortedCategories, homeSortDraft)
-      await onReorganizeBookmarks(categoryOrders)
+      await onReorganizeBookmarks(categoryOrders, homeSortDeletedIds)
       cancelHomeSort()
     } catch (error) {
       // 整理接口是全量提交，失败说明草稿与服务端集合已不一致：
       // 丢弃草稿退出排序会话，但保留工具条用于展示错误，否则错误没有落点。
       homeSortMode = false
       homeSortDraft = []
+      homeSortDeletedIds = []
       homeSortError = getErrorMessage(error)
     } finally {
       homeSortSaving = false
@@ -788,10 +799,16 @@
         <span class="home-sort-message home-sort-error" role="alert">保存排序失败：{homeSortError}</span>
         <button type="button" class="home-sort-cancel" onclick={cancelHomeSort}>关闭</button>
       {:else}
-        <span class="home-sort-message">正在排序：可将书签拖到其他分类，完成后保存。</span>
+        <div class="home-sort-message">
+          <div class="home-delete-drop-zone" data-sort-category-id="-1"
+            use:sortableList={{ enabled: isAuthenticated && !homeSortSaving, group: 'home-bookmark-categories', onSort: () => {}, onTransfer: handleHomeSortTransfer }}>
+            拖到这里删除书签（{homeSortDeletedIds.length} 个待删除）
+          </div>
+          <span>可跨分类拖动；保存后生效，取消可恢复。</span>
+        </div>
         <button type="button" class="home-sort-cancel" onclick={cancelHomeSort} disabled={homeSortSaving}>取消</button>
         <button type="button" class="home-sort-save" onclick={saveHomeSort} disabled={homeSortSaving}>
-          {homeSortSaving ? '保存中…' : '保存排序'}
+          {homeSortSaving ? '保存中…' : homeSortDeletedIds.length ? `保存并删除 ${homeSortDeletedIds.length} 个书签` : '保存排序'}
         </button>
       {/if}
     </div>
@@ -1023,6 +1040,17 @@
     font-size: 0.84rem;
     font-weight: 650;
   }
+  .home-delete-drop-zone {
+    min-height: 48px;
+    padding: 0.6rem 1rem;
+    border: 2px dashed #dc2626;
+    border-radius: 0.6rem;
+    color: #dc2626;
+    background: color-mix(in srgb, #dc2626 10%, transparent);
+    margin-bottom: 0.4rem;
+    text-align: center;
+  }
+
   .home-sort-message {
     min-width: 0;
   }

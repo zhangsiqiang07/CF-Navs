@@ -248,7 +248,12 @@ export async function reorganizeBookmarks(
  db: D1Database,
  categoryOrders: Array<{ category_id: number; ids: number[] }>,
  receipt?: MutationReceipt,
+ deletedIds: number[] = [],
 ): Promise<void> {
+ const deleted = new Set(deletedIds)
+ if (deleted.size !== deletedIds.length || deletedIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+  throw new BookmarkReorganizeError('invalid deleted bookmark ids')
+ }
  const categoryIds = new Set<number>()
  const bookmarkToCategory = new Map<number, number>()
  // sort 在整个请求范围内单调递增，而不是每个分类从 0 重新开始：
@@ -262,7 +267,7 @@ export async function reorganizeBookmarks(
   }
   categoryIds.add(order.category_id)
   for (const id of order.ids) {
-   if (bookmarkToCategory.has(id)) {
+   if (bookmarkToCategory.has(id) || deleted.has(id)) {
     throw new BookmarkReorganizeError('duplicate bookmark order')
    }
    bookmarkToCategory.set(id, order.category_id)
@@ -283,17 +288,18 @@ export async function reorganizeBookmarks(
  }
 
  const existingBookmarkIds = (bookmarksResult.results ?? []).map((bookmark) => bookmark.id)
- if (existingBookmarkIds.length !== bookmarkToCategory.size) {
+ if (existingBookmarkIds.length !== bookmarkToCategory.size + deleted.size) {
   throw new BookmarkReorganizeError('bookmark order must include every bookmark')
  }
  for (const id of existingBookmarkIds) {
-  if (!bookmarkToCategory.has(id)) {
+  if (!bookmarkToCategory.has(id) && !deleted.has(id)) {
    throw new BookmarkReorganizeError('bookmark order must include every bookmark')
   }
  }
 
  const categoryEntries: RowUpdateEntry[] = [...bookmarkToCategory]
  await runUpdateChunks(db, [
+  ...deletedIds.map((id) => ({ sql: 'DELETE FROM bookmarks WHERE id = ?', params: [id] })),
   ...buildColumnUpdateChunks('bookmarks', 'category_id', categoryEntries),
   ...buildColumnUpdateChunks('bookmarks', 'sort', sortEntries),
  ], receipt)

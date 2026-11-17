@@ -159,7 +159,10 @@ bookmarksRoutes.post('/batch-move', async (c) => {
 bookmarksRoutes.post('/reorganize', async (c) => {
  const body = await readJson<BookmarkReorganizeReq>(c)
  const categoryOrders = body?.category_orders
+ const deletedIds = body?.deleted_ids ?? []
  if (
+  !Array.isArray(deletedIds) ||
+  !deletedIds.every((id) => Number.isInteger(id) && id > 0) ||
   !Array.isArray(categoryOrders) ||
   !categoryOrders.every((order) => (
    order &&
@@ -174,7 +177,7 @@ bookmarksRoutes.post('/reorganize', async (c) => {
 
  try {
   const receipt = createMutationReceipt()
-  await reorganizeBookmarks(c.env.DB, categoryOrders, receipt)
+  await reorganizeBookmarks(c.env.DB, categoryOrders, receipt, deletedIds)
   return mutationJson(c, null, receipt)
  } catch (error) {
   // 请求集合与库中状态不一致（分类被删、书签集合过期）属于状态冲突，

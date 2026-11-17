@@ -48,7 +48,7 @@ export interface BookmarkControllerDeps {
       batchDelete: (ids: number[]) => Promise<BatchDeleteBookmarksResp>
       batchMove: (payload: BookmarkBatchMoveReq) => Promise<BookmarkBatchMoveResp>
       sort: (ids: number[]) => Promise<unknown>
-      reorganize: (categoryOrders: BookmarkReorganizeReq['category_orders']) => Promise<unknown>
+      reorganize: (categoryOrders: BookmarkReorganizeReq['category_orders'], deletedIds?: number[]) => Promise<unknown>
     }
   }
   /** 当前登录会话（`get(authStore).session`），按引用比较判断提交 / 编辑是否仍属于发起时的会话。 */
@@ -87,7 +87,7 @@ export interface BookmarkController {
   batchMove: (payload: BookmarkBatchMoveReq) => Promise<void>
   sort: (ids: Array<string | number>) => Promise<void>
   /** 跨分类整理（全量提交）：失败时先回滚到服务端数据再抛出原始错误，由首页展示。 */
-  reorganize: (categoryOrders: BookmarkReorganizeReq['category_orders']) => Promise<void>
+  reorganize: (categoryOrders: BookmarkReorganizeReq['category_orders'], deletedIds?: number[]) => Promise<void>
 }
 
 export function createBookmarkController(deps: BookmarkControllerDeps): BookmarkController {
@@ -277,9 +277,10 @@ export function createBookmarkController(deps: BookmarkControllerDeps): Bookmark
     })
   }
 
-  async function reorganize(categoryOrders: BookmarkReorganizeReq['category_orders']): Promise<void> {
+  async function reorganize(categoryOrders: BookmarkReorganizeReq['category_orders'], deletedIds?: number[]): Promise<void> {
     try {
-      await deps.api.bookmarks.reorganize(categoryOrders)
+      if (deletedIds?.length) await deps.api.bookmarks.reorganize(categoryOrders, deletedIds)
+      else await deps.api.bookmarks.reorganize(categoryOrders)
     } catch (caught) {
       await deps.refreshLoggedInData(true)
       throw caught

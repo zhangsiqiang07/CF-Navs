@@ -304,8 +304,8 @@ export const bookmarksApi = {
   batchDelete: (ids: number[]) => jsonRequest<BatchDeleteBookmarksResp>('/bookmarks/batch-delete', 'POST', { ids }, true),
   batchMove: (payload: BookmarkBatchMoveReq) => jsonRequest<BookmarkBatchMoveResp>('/bookmarks/batch-move', 'POST', payload, true),
   sort: (ids: SortReq['ids']) => jsonRequest<null>('/bookmarks/sort', 'POST', { ids }, true),
-  reorganize: (category_orders: BookmarkReorganizeReq['category_orders']) =>
-    jsonRequest<null>('/bookmarks/reorganize', 'POST', { category_orders }, true),
+  reorganize: (category_orders: BookmarkReorganizeReq['category_orders'], deleted_ids?: number[]) =>
+    jsonRequest<null>('/bookmarks/reorganize', 'POST', { category_orders, deleted_ids }, true),
   checkHealth: (ids: number[]) =>
     jsonRequest<Array<{ id: number; status: number | string; ok: boolean }>>('/bookmarks/check-health', 'POST', { ids }, true),
   fetchFavicon: (url: string) =>

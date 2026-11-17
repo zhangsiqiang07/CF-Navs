@@ -69,6 +69,30 @@ describe('reorganizeBookmarks', () => {
     await expect(reorganizeBookmarks(db, [{ category_id: 1, ids: [10] }]))
       .rejects.toBeInstanceOf(BookmarkReorganizeError)
   })
+  it('deletes discarded bookmarks and reorders survivors in one atomic batch', async () => {
+    const { db, updateBatches } = createFakeDb([1, 2], [10, 11])
+    await reorganizeBookmarks(db, [{ category_id: 2, ids: [11] }], undefined, [10])
+    expect(updateBatches).toHaveLength(1)
+    expect(updateBatches[0][0].sql).toBe('DELETE FROM bookmarks WHERE id = ?')
+    expect(updateBatches[0][0].params).toEqual([10])
+    expect(updateBatches[0].at(-1)?.sql).toContain("'data_version'")
+  })
+
+  it('rejects duplicate, overlapping and stale deletions without writes', async () => {
+    for (const deleted of [[10, 10], [11], [99]]) {
+      const { db, updateBatches } = createFakeDb([1], [10, 11])
+      await expect(reorganizeBookmarks(db, [{ category_id: 1, ids: [11] }], undefined, deleted))
+        .rejects.toBeInstanceOf(BookmarkReorganizeError)
+      expect(updateBatches).toHaveLength(0)
+    }
+  })
+
+  it('allows deleting all bookmarks', async () => {
+    const { db, updateBatches } = createFakeDb([1], [10])
+    await reorganizeBookmarks(db, [{ category_id: 1, ids: [] }], undefined, [10])
+    expect(updateBatches[0]).toHaveLength(2)
+  })
+
   it('restricts anonymous click updates to public bookmarks', async () => {
     let sql = ''
     const db = {
