@@ -492,29 +492,17 @@
     min-width: 0;
     align-items: center;
     gap: 0.28rem;
-    overflow-x: auto;
+    flex-wrap: wrap;
     padding: 0.02rem 0 0.16rem;
     scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--home-text-color) 34%, transparent) transparent;
     overscroll-behavior-inline: contain;
   }
 
-  /*
-   * 桌面端 CategorySection 的绝对操作行包含「新建子分类 / 新增书签 / 排序」三项，
-   * 不占分类标题与子分类标签的布局空间。标签行需要预留操作行宽度，避免横向滚动
-   * 到末端时最后一个子分类标签被操作按钮遮挡。
-   *
-   * `scroll-padding-inline-end` 同步预留区，保证键盘与程序化滚动也能停在操作行左侧。
-   * 300px 按三按钮实际文案、图标、间距与安全余量收敛；修改任一按钮文案或内边距时要重新量。
-   * `tests/unit/homeResponsiveLayout.test.ts` 锁住「有操作行就必须有预留」。
-   */
-  .category-scope.has-actions {
-    --scope-actions-reserve: 300px;
-  }
-
-  .category-scope.has-actions .scope-tabs {
-    padding-right: var(--scope-actions-reserve);
-    scroll-padding-inline-end: var(--scope-actions-reserve);
+  /* 操作行绝对定位在右上角；从整行可用宽度扣除预留，子分类在其左侧换行。 */
+  .category-scope.has-actions .scope-title-row {
+    box-sizing: border-box;
+    padding-right: 320px;
   }
 
   .scope-tabs::-webkit-scrollbar {
@@ -536,7 +524,14 @@
     font: inherit;
     font-size: var(--category-child-font-size, 0.82rem);
     font-weight: 600;
-    white-space: nowrap;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: left;
+  }
+
+  .scope-tabs button span {
+    min-width: 0;
   }
 
   .scope-root-trigger:hover,
@@ -621,15 +616,14 @@
     .scope-tabs {
       order: 3;
       flex-basis: 100%;
-      margin-right: -1rem;
-      padding-right: 1rem;
+      margin-right: 0;
+      padding-right: 0;
       scrollbar-width: none;
     }
 
     /* 移动端操作行整体隐藏、标签换到第二行，桌面那份预留在这里反而会留一大块空白 */
     .category-scope.has-actions .scope-tabs {
-      padding-right: 1rem;
-      scroll-padding-inline-end: 0;
+      padding-right: 0;
     }
 
     .scope-tabs::-webkit-scrollbar {
